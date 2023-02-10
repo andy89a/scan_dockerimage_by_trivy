@@ -1,0 +1,41 @@
+#!/bin/bash
+
+sudo mv ./ca.crt /usr/local/share/ca-certificates/ca.crt
+sudo update-ca-certificates
+sudo systemctl restart docker.service
+
+
+
+#0126 시도.. github actions의 secret에 ca.crt 값을 넣고 그 값을 특정 경로에 넣어보자. 그전에 ca.crt ca.cert 차이에 대해서 알아보자.
+
+
+# -----BEGIN CERTIFICATE-----
+# MIIFMTCCAxmgAwIBAgIUFwKABjTtpEDSUwsZ/U9IhWq+XnswDQYJKoZIhvcNAQEN
+# BQAwRTELMAkGA1UEBhMCQVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoM
+# GEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDAeFw0yMzAxMjAwODM2NDZaFw0yNDAx
+# MjAwODM2NDZaMEUxCzAJBgNVBAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEw
+# HwYDVQQKDBhJbnRlcm5ldCBXaWRnaXRzIFB0eSBMdGQwggIiMA0GCSqGSIb3DQEB
+# AQUAA4ICDwAwggIKAoICAQCj1jUIgiyr0ASS/+CfIpB3pTmOcoXTMriKpoLcXxql
+# cB5heYN1RGt6xOSvrohYiP2Sq4bWCVXLp6zh8MBCwzCheG3l+kJoVP+2wABTeIiC
+# /O6G9w6TeTddB+ZXvEuSfsuQ4kVCt4UijIyf3zFBHQc1Lf1fn2zOML8JmozDOH3O
+# ThnG9ShDNLTboUAjFEjxQisad+FLYpq56c9RAlZpU5BNlV3YBpSMpxGAm5O05OBW
+# 0ncFKClWJnhY1AxHbbX5T7ulTwGMWb7+vwRCJ2S+BFTgm9/vRMUzQt2mlKv4sMKw
+# EM5B7U23GJkgDw2OZIVEi6Roegy9rQdmjWPLQFJk7ADiR9rJGMczrq1UDejbpcZc
+# C4ZnCFHvigBdiw0lemkUD5Z5/6Y3/xPdPTNI9WbDTlIl6XYcPmWfW2yI9hF6/B7r
+# vvZyXT6Xrf9lK4E68JHhpnIKFoqwvB6EEVFk0RL+8TeH/HEOukg8dZ+F14KGEIk5
+# M6p7GmW22RVBj+vidgftYzc+15pcZ12R7NufTWHCmfY4lxoox2kn9jUcoFkZym72
+# K9m6wxt953LLvB8E5fQOZ3UgRe+g1TybYV0MUdtdwnGLBoIv6f7GqmCx3jdv8EYc
+# +Ny2MTh73YxzhAkJL6wa8B3x5faSoiG4sGysyApbc7AZdkXPsS7Mwvk5684Gzpz3
+# 5wIDAQABoxkwFzAVBgNVHREEDjAMhwQryMJ6hwR/AAABMA0GCSqGSIb3DQEBDQUA
+# A4ICAQA0kvoAeVL6pzGOyoFSfxyTSsO6/bZu/TtpISIImp4yBjvqPvyuZgzOYrNr
+# i2B4x0syaq6b3kuQMEvZcDNMo0KX9W5eppMZkg2KODMDA2k7XEJfXVkEqD+gKTzi
+# D0VFa2EodViDyl8/LftnbSnmoLRX8qnW/ubsVCRg9oG87CKK6M3vMxvNHEUQWzso
+# geVrN5dL76HK7aIZOiNUiESZ8gGGS8GfGxkFNv3c9dnUldnWuc298QnLGgxy+zSH
+# Vzumlf9yvwoCpls067h0gmmAvq4UjQUktBE5KEAn1pBTfi+yJCjcFbbdyrsbAlHg
+# syX8FGIuucZAif5BjfSSDt+//0Ak1gqxqfAcgVKnh2W8fQcN2iOBixUBQbF02Fts
+# xQvqsDv29WRayhSRJr3tjEIkbDyclL6GLkjqd2g3qH9xtMfZUa2wCSFa20M55WSe
+# qqG2VdScN9DCtzyta3ONBRyCJBeDVYDt4r9ywYWX8TprE6zjyIR87jUhHwwRnzuQ
+# 5WZ6+ilgA+9n4bdLmBcyyo2fBsodwR9DG5nDE6qUQbryOOHe8VDHKv2x4jfaA3Eo
+# JJLgkK7uOBd443wCtgcoMa1vSFn7WMKASJ2voIyNBMQ+iVJkcbLq91zCkopVTvd8
+# IQErC9qBWP/wwppkwwa33dVllz6VIzgVpRDBspl0ytMXQJFn1w==
+# -----END CERTIFICATE-----

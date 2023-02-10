@@ -1,0 +1,199 @@
+# 2023.02.10 
+# - 목적: 오픈소스인 trivy 이용하여 docker image repository 내 docker image os, library 취약점 점검
+# - 설명: github action 실행 단계에서 PROJECT_NAME(repo), IMAGE_NAME 입력 시 동작 함. 트리거가 workflow_disapatch 설정해서 수동 실행. 필요 시 이 부분을 push, schedule, pull_request 등등 변경하여 트리거 변경 가능
+# - 참고: 아래 값은 github secret에 저장되어 있는 변수들이므로 참고 
+#   . DOCKERHUB_IP
+#   . DOCKERHUB_USERNAME
+#   . DOCKERHUB_TOKEN
+#   . ELASTICSEARCH_IP_PORT 
+#   . ELASTIC_PASSWORD
+#   . ELASTIC_USERNAME 
+
+
+
+name: trivy-scanning for docker image
+on: 
+  workflow_dispatch:
+    inputs:
+      PROJECT_NAME:
+        description: 'Enter project name'
+        required: True
+        default: 'test_project'
+      IMAGE_NAME:
+        description: 'Enter image:tags'
+        required: True
+        default: 'new_test_image:1'
+jobs:
+  trivy-scanning-job:
+    environment: dev
+    runs-on: ubuntu-latest
+    name: A job to scan repo
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Apply Self-signed root CA to github runner
+        run: |
+          chmod +x ./cert.sh
+          ./cert.sh
+        shell: bash
+
+      - name: Login to Harbor
+        uses: docker/login-action@v2
+        with: 
+          registry: ${{ secrets.DOCKERHUB_IP }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          ecr: false
+      - name: Pull Scan Images
+        run: |
+          docker pull '${{ secrets.DOCKERHUB_IP }}/${{ inputs.PROJECT_NAME }}/${{ inputs.IMAGE_NAME }}'
+        shell: bash
+
+      - name: scan image vulnerability
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: '${{ secrets.DOCKERHUB_IP }}/test_project/${{ inputs.IMAGE_NAME }}' 
+          vuln-type: 'os,library'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+          security-checks: 'vuln'
+          format: 'json'
+          output: 'trivy-result.json'
+
+
+      - name: install jq
+        run: |
+          curl -L https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 -o /usr/local/bin/jq >/dev/null
+          chmod a+x /usr/local/bin/jq
+
+
+      - name: check trivy result
+        id: result
+        shell: bash
+        run: |
+          cat trivy-result.json
+          echo "OS Check"
+          os_info=`cat trivy-result.json | jq 'try .Results[0].Vulnerabilities[]'`
+          library_info=`cat trivy-result.json | jq 'try .Results[1].Vulnerabilities[]'`
+          if [[ $os_info == *Severity* ]]; then
+            os_count=`cat trivy-result.json | jq 'try .Results[0].Vulnerabilities[].Severity' | grep -e HIGH -e CRITICAL |wc -l | xargs`
+          else
+            os_count=0
+          fi
+          echo "Library Check"
+          if [[ $library_info == *Severity* ]]; then
+            library_count=`cat trivy-result.json | jq 'try .Results[1].Vulnerabilities[].Severity' | grep -e HIGH -e CRITICAL |wc -l | xargs`
+          else
+            library_count=0
+          fi
+          echo $os_critical_count
+          echo $library_count
+          OS_COUNT=$((os_count))
+          LIBRARY_COUNT=$((library_count))
+          TOTAL_COUNT=$(($OS_COUNT+$LIBRARY_COUNT))
+          TOTAL_OS_COUNT=$(($OS_COUNT))
+          TOTAL_LIBRARY_COUNT=$(($LIBRARY_COUNT))
+          echo "==== TOTAL VULNERABILITY ===="
+          echo "TOTAL OS_VULNERABILITY COUNT: $TOTAL_OS_COUNT"
+          echo "TOTAL LIBRARY_VULNERABILITY COUNT: $TOTAL_LIBRARY_COUNT"
+          echo "TOTAL VULNERABILITY COUNT: $TOTAL_COUNT"
+          echo "TOTAL_OS_COUNT=$TOTAL_OS_COUNT" >> $GITHUB_OUTPUT
+          echo "TOTAL_LIBRARY_COUNT=$TOTAL_LIBRARY_COUNT" >> $GITHUB_OUTPUT
+          echo "check=true" >> $GITHUB_OUTPUT
+          if [[ $TOTAL_COUNT -gt 0 ]]; then
+            echo "Image vulnerability detect"
+            echo "check=false" >> $GITHUB_OUTPUT
+          else
+            echo "## Trivy Summary(OS)" >> $GITHUB_STEP_SUMMARY
+            echo "| PkgName    | CVE        | Severity    | InstallVersion    | FixVersion    |" >> $GITHUB_STEP_SUMMARY
+            echo "|------------|------------|-------------|-------------------|---------------|" >> $GITHUB_STEP_SUMMARY
+            echo "| -          | -          | -           | -                 | -             |" >> $GITHUB_STEP_SUMMARY
+            echo "## Trivy Summary(LIBRARY)" >> $GITHUB_STEP_SUMMARY
+            echo "| PkgName    | CVE        | Severity    | InstallVersion    | FixVersion    |" >> $GITHUB_STEP_SUMMARY
+            echo "|——————|——————|——————|—————————|———————|" >> $GITHUB_STEP_SUMMARY
+            echo "| -          | -          | -           | -                 | -             |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: trivy summary show
+        shell: bash
+        if: |
+          steps.result.outputs.check == 'false'
+        run: |
+          echo "====== TOTAL COUNT ======"
+          echo ${{ steps.result.outputs.TOTAL_OS_COUNT }}
+          echo ${{ steps.result.outputs.TOTAL_LIBRARY_COUNT }}
+          echo "========================"
+          echo "## Trivy Summary(OS)" >> $GITHUB_STEP_SUMMARY
+          echo "| PkgName    | CVE        | Severity    | InstallVersion    | FixVersion    |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|------------|-------------|-------------------|---------------|" >> $GITHUB_STEP_SUMMARY
+          if [[ ${{ steps.result.outputs.TOTAL_OS_COUNT}} -gt 0 ]]; then
+            cat trivy-result.json | jq -r '(try .Results[0].Vulnerabilities[] | .PkgName, .VulnerabilityID, .Severity, .InstalledVersion, .FixedVersion)' > os_summary.txt
+            os_cnt=`cat os_summary.txt | wc -l | xargs`
+            for num in $(seq 1 5 $os_cnt)
+            do
+              index_1=`expr $num`
+              index_2=`expr $num + 1`
+              index_3=`expr $num + 2`
+              index_4=`expr $num + 3`
+              index_5=`expr $num + 4`
+              PkgName=`head -n $index_1 os_summary.txt | tail -n 1`
+              VulnerabilityID=`head -n $index_2 os_summary.txt | tail -n 1`
+              Severity=`head -n $index_3 os_summary.txt | tail -n 1`
+              InstalledVersion=`head -n $index_4 os_summary.txt | tail -n 1`
+              FixedVersion=`head -n $index_5 os_summary.txt | tail -n 1`
+              echo "PKGNAME: $PkgName"
+              echo "VulnerabilityID: $VulnerabilityID"
+              echo "Severity: $Severity"
+              echo "InstalledVersion: $InstalledVersion"
+              echo "FixedVersion: $FixedVersion"
+              echo "| $PkgName    | $VulnerabilityID       | $Severity        | $InstalledVersion              | $FixedVersion              |" >> $GITHUB_STEP_SUMMARY
+            done
+          else
+            echo "| -          | -          | -           | -                 | -             |" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "## Trivy Summary(LIBRARY)" >> $GITHUB_STEP_SUMMARY
+          echo "| PkgName    | CVE        | Severity    | InstallVersion    | FixVersion    |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|------------|-------------|-------------------|---------------|" >> $GITHUB_STEP_SUMMARY
+          if [[ ${{steps.result.outputs.TOTAL_LIBRARY_COUNT}} -gt 0 ]]; then
+            cat trivy-result.json | jq -r '(try .Results[1].Vulnerabilities[] | .PkgName, .VulnerabilityID, .Severity, .InstalledVersion, .FixedVersion)' > library_summary.txt
+            library_cnt=`cat library_summary.txt | wc -l | xargs`
+            for num in $(seq 1 5 $library_cnt)
+            do
+              index_1=`expr $num`
+              index_2=`expr $num + 1`
+              index_3=`expr $num + 2`
+              index_4=`expr $num + 3`
+              index_5=`expr $num + 4`
+              PkgName=`head -n $index_1 library_summary.txt | tail -n 1`
+              VulnerabilityID=`head -n $index_2 library_summary.txt | tail -n 1`
+              Severity=`head -n $index_3 library_summary.txt | tail -n 1`
+              InstalledVersion=`head -n $index_4 library_summary.txt | tail -n 1`
+              FixedVersion=`head -n $index_5 library_summary.txt | tail -n 1`
+              echo "| $PkgName    | $VulnerabilityID       | $Severity        | $InstalledVersion              | $FixedVersion          |" >> $GITHUB_STEP_SUMMARY
+            done
+          else
+            echo "| -          | -          | -           | -                 | -             |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+
+      - name: send log to elasticsearch
+        shell: bash
+        run: |
+          echo "Check variables"
+          echo "TOTAL_OS_COUNT: $TOTAL_OS_COUNT"
+          echo "TOTAL_LIBRARY_COUNT: $TOTAL_LIBRARY_COUNT"
+          export TOTAL_COUNT=$(expr $TOTAL_OS_COUNT + $TOTAL_LIBRARY_COUNT)
+          echo "TOTAL_COUNT: $TOTAL_COUNT"
+          echo "-----------------------------------------"
+          echo "-----------------------------------------"
+          echo "Repository: $SCAN_REPOSITORY"
+          echo "Image_name: $IMAGE_NAME"
+          curl -k -u ${{ secrets.ELASTIC_USERNAME }}:${{ secrets.ELASTIC_PASSWORD }} -XPOST '${{ secrets.ELASTICSEARCH_IP_PORT }}/trivy/_doc' -d '{"timestamp":"'"$(date +%Y-%m-%dT%H:%M:%S)"'", "total_os_count":"'"$TOTAL_OS_COUNT"'", "total_library_count":"'"$TOTAL_LIBRARY_COUNT"'", "total_count":"'"$TOTAL_COUNT"'", "repository":"'"${{ inputs.PROJECT_NAME }}"'", "image_name":"'"${{ inputs.IMAGE_NAME }}"'"}' -H 'Content-Type: application/json'
+
+        env: 
+          TOTAL_OS_COUNT: ${{ steps.result.outputs.TOTAL_OS_COUNT }}
+          TOTAL_LIBRARY_COUNT: ${{ steps.result.outputs.TOTAL_LIBRARY_COUNT }}
+
+
