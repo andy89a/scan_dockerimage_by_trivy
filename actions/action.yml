@@ -1,8 +1,0 @@
-# name: 'Harbor Login'
-# description: 'Private Harbor Login with docker login'
-# runs:
-#   using: "composite"
-#   steps:
-#     - name: docker login
-#       run: docker login 43.201.9.122 -u admin -p Harbor12345
-#       shell: bash
