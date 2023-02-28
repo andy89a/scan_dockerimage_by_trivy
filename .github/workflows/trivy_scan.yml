@@ -56,7 +56,7 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'image'
-          image-ref: '${{ secrets.DOCKERHUB_IP }}/test_project/${{ inputs.IMAGE_NAME }}' 
+          image-ref: '${{ secrets.DOCKERHUB_IP }}/${{ inputs.PROJECT_NAME }}/${{ inputs.IMAGE_NAME }}' 
           vuln-type: 'os,library'
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
